@@ -598,6 +598,12 @@ def fetch_threads(limit: int = 20, query: str = "in:inbox") -> list[dict[str, st
     """
     if limit < 1:
         return []
+    # Streamlit deployments do not have the local Cline/MCP process.  Allow
+    # them to select the raw Gmail API explicitly, which avoids attempting to
+    # launch a missing MCP binary before falling back.
+    backend = os.environ.get("GMAIL_FETCH_BACKEND", "").strip().lower()
+    if backend in {"raw", "gmail_api", "google_api"}:
+        return _fetch_threads_raw(limit, query)
     try:
         return _fetch_threads_mcp(limit, query)
     except (FileNotFoundError, RuntimeError) as exc:

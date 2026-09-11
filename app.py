@@ -54,6 +54,7 @@ from task_logger import get_action_log, log_action  # audit trail: action_log.js
 
 WORKSPACE_DIR = Path(__file__).resolve().parent
 SAMPLE_THREADS_PATH = WORKSPACE_DIR / "sample_threads.json"
+APP_BUILD = "cloud-fallback-2026-09-12"
 
 # engine.py truncates snippets to 200 chars before returning them; we apply
 # the same cap to sample bodies so triage sees the same input shape
@@ -1799,6 +1800,7 @@ def render_sidebar() -> None:
     with st.sidebar:
         st.title("✍️ The Draft Desk")
         st.caption("Your AI chief of staff — triage the inbox, draft replies, gate approvals, export the proof.")
+        st.caption(f"Build: {APP_BUILD}")
         st.divider()
 
         # The one-click pipeline: sets the flag and reruns — main() then

@@ -32,6 +32,9 @@ app start:
 
 Everything is a no-op on a normal dev machine (files exist, st.secrets
 absent), so calling it unconditionally is safe.
+
+For a deployment without the MCP server, set GMAIL_FETCH_BACKEND = "raw" in
+Secrets. This makes engine.fetch_threads() use the Gmail API directly.
 """
 
 from __future__ import annotations
@@ -92,6 +95,12 @@ def ensure_runtime_credentials() -> list[str]:
     Idempotent; returns human-readable report lines for logging.
     """
     report: list[str] = []
+
+    # The Streamlit app is headless: prefer the raw Gmail API instead of
+    # trying to start a local Cline/MCP subprocess that is not present in the
+    # deployment image.  A caller can still override this with "mcp".
+    os.environ.setdefault("GMAIL_FETCH_BACKEND", "raw")
+    report.append("Gmail fetch backend: " + os.environ["GMAIL_FETCH_BACKEND"])
 
     # 1) Secrets -> environment (never overrides already-set variables).
     applied = 0
