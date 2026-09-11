@@ -805,3 +805,35 @@ Aspiring AI Product Manager
 Interested in building AI products at the intersection of:
 
 Product Management × AI/ML × Automation × Human-Centered Design
+
+# Chief of Staff AI
+
+> **An AI-powered executive assistant that turns an overloaded inbox into a prioritized action queue — while keeping humans in control of consequential actions.**
+
+[![AI Product](https://img.shields.io/badge/AI-Product%20Management-blue)]()
+[![Python](https://img.shields.io/badge/Python-3.x-yellow)]()
+[![Streamlit](https://img.shields.io/badge/Frontend-Streamlit-red)]()
+[![Gmail](https://img.shields.io/badge/Integration-Gmail%20API-orange)]()
+
+---
+
+## 🚀 Product Overview
+
+**Chief of Staff AI** is a working AI product prototype that helps professionals manage email overload, identify what requires attention, prepare responses, and coordinate meetings.
+
+Instead of treating every email equally, the product creates an **action-oriented workflow**:
+
+```text
+Inbox
+  ↓
+AI Triage
+  ↓
+Priority & Action Queue
+  ↓
+Draft Generation
+  ↓
+Human Review
+  ↓
+Approval
+  ↓
+Email / Calendar Action
