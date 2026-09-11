@@ -692,7 +692,7 @@ def render_inbox_phase() -> None:
     st.header("📥 Inbox & Triage")
     st.caption(
         f"Phase {PHASES.index('Inbox & Triage') + 1} of {len(PHASES)} — "
-        f"pull threads from the selected source and classify them with triage.py."
+        f"Pull threads from the selected source, then triage them by priority. Once triaged, the highest-priority threads move to Draft Generation."
     )
 
     if st.button(
@@ -1819,7 +1819,8 @@ def render_sidebar() -> None:
             "Source",
             [SOURCE_GMAIL, SOURCE_SAMPLE],
             key="source",
-            help="Gmail pulls live threads through engine.py (Gmail MCP server). "
+            help="Gmail pulls live threads through engine.py (MCP server when "
+            "available, raw Gmail API as the deployment fallback). "
             "Sample threads load sample_threads.json — no Gmail needed.",
         )
 
@@ -1865,16 +1866,54 @@ def main() -> None:
     A FATAL run lands back on the Inbox instead — this warning is the only
     persistent trace of what went wrong (the status container is transient).
     """
+    # Cloud deployments keep every credential in st.secrets; bridge them into
+    # the environment/files the pipeline expects (a no-op locally, where the
+    # real files already exist and st.secrets is absent).
+    try:
+        from bootstrap import ensure_runtime_credentials
+
+        ensure_runtime_credentials()
+    except Exception:  # noqa: BLE001 — bootstrap must never take the app down
+        pass
+
     error = st.session_state.get("pipeline_error")
     if error:
+        # The hint below must match WHY the run failed: the quota text is only
+        # right for LLM-related failures — a missing Gmail MCP server or an
+        # unprovisioned OAuth grant is a credentials/deployment problem, and
+        # showing "add OpenRouter credits" for it just misleads.
+        lowered = error.lower()
+        quota_related = any(
+            marker in lowered
+            for marker in (
+                "quota", "429", "rate limit", "credit", "402", "401",
+                "openrouter", "gemini", "llm", "api key", "backends failed",
+                "empty response",
+            )
+        )
+        if quota_related:
+            hint = (
+                "\n\n**Most common cause: the LLM free-tier quota is exhausted** "
+                "(OpenRouter free models: ~50/day; Gemini free tier: 20/day for "
+                "gemini-3.7-flash). Wait for the daily reset, add OpenRouter "
+                "credits, or point `OPENROUTER_MODEL` in `.env` at a paid model — "
+                "then press **⚡ Run Full Pipeline** again."
+            )
+        else:
+            hint = (
+                "\n\n**Most likely cause on a deployment:** this machine has no "
+                "Gmail MCP server and no provisioned credentials. Fetch falls "
+                "back to the raw Gmail API, which needs `GOOGLE_TOKEN_JSON`, and "
+                "triage/drafts need `OPENROUTER_API_KEY` or `GEMINI_API_KEY` — "
+                "add them in this app's **Secrets** settings (see the "
+                "`bootstrap.py` docstring for the exact names), then press "
+                "**⚡ Run Full Pipeline** again. Locally nothing is needed — "
+                "the `.env` / `token.json` / MCP server files already exist."
+            )
         st.warning(
             "⚡ The last full-pipeline run stopped early:\n\n"
             + error
-            + "\n\n**Most common cause: the LLM free-tier quota is exhausted** "
-            "(OpenRouter free models: ~50/day; Gemini free tier: 20/day for "
-            "gemini-3.7-flash). Wait for the daily reset, add OpenRouter "
-            "credits, or point `OPENROUTER_MODEL` in `.env` at a paid model — "
-            "then press **⚡ Run Full Pipeline** again.",
+            + hint,
             icon="⚠️",
         )
     if st.session_state.pipeline_running:

@@ -31,6 +31,11 @@ Server launch order:
      if one is registered there.
   2. Fallback: `node gmail-mcp-server/dist/index.js` from this workspace
      (the local clone of the very server Cline runs).
+  3. Raw Gmail API fallback: when neither MCP option can even be LAUNCHED —
+     the case on fresh cloud deployments (e.g. Streamlit Community Cloud
+     clones only this repo, and gmail-mcp-server/ is deliberately not in it) —
+     fetch_threads() switches to the same googleapiclient grant (token.json)
+     that send_reply() already uses. See _fetch_threads_raw().
 
 OAuth is handled entirely by the server process itself: it reads the
 refresh token from ~/.gmail-mcp/credentials.json, so no browser
@@ -576,6 +581,133 @@ def send_reply(
 
 
 def fetch_threads(limit: int = 20, query: str = "in:inbox") -> list[dict[str, str]]:
+    """
+    Fetch the most recent inbox threads: Gmail MCP server first, then the
+    raw Gmail API as the deployment fallback.
+
+    Returns up to `limit` dicts, newest first, each shaped as:
+        {"thread_id": ..., "sender": ..., "subject": ..., "snippet": ..., "date": ...}
+
+    Backend dispatch: the MCP server is preferred (identical behaviour to
+    before), but when it cannot even be LAUNCHED — no Cline registration, no
+    local gmail-mcp-server clone, or no node runtime, the situation on fresh
+    cloud deployments — the call falls back to _fetch_threads_raw(). MCP
+    failures that happen AFTER a successful launch (auth, quota, tool
+    errors, timeouts) still surface unchanged: silently switching backends
+    mid-session would mask the real problem.
+    """
+    if limit < 1:
+        return []
+    try:
+        return _fetch_threads_mcp(limit, query)
+    except (FileNotFoundError, RuntimeError) as exc:
+        launch_failure = (
+            isinstance(exc, FileNotFoundError) or "Could not launch" in str(exc)
+        )
+        if not launch_failure:
+            raise  # genuine MCP session error — surface it, don't switch
+        return _fetch_threads_raw(limit, query)
+
+
+def _decode_b64url(data: str) -> str:
+    """Decode a Gmail v1 base64url body/data string to text (UTF-8, lenient)."""
+    padded = data + "=" * (-len(data) % 4)
+    return base64.urlsafe_b64decode(padded).decode("utf-8", errors="replace")
+
+
+def _payload_to_text(payload: dict) -> str:
+    """
+    Flatten a Gmail v1 message payload into plain text.
+
+    Mirrors what the MCP server's read_email returns: the text/plain part
+    when one exists, otherwise the text/html part with tags stripped (the
+    same _HTML_TAG_RE cleanup _make_snippet applies to the MCP path's
+    HTML-note bodies). Attachments and other mime types are skipped.
+    """
+    plain_data: str | None = None
+    html_data: str | None = None
+    stack = [payload]
+    while stack:
+        node = stack.pop(0)
+        parts = node.get("parts")
+        if parts:
+            stack = list(parts) + stack  # BFS keeps document order
+            continue
+        data = (node.get("body") or {}).get("data")
+        if not data:
+            continue
+        mime = str(node.get("mimeType", "")).lower()
+        if mime == "text/plain" and plain_data is None:
+            plain_data = data
+        elif mime == "text/html" and html_data is None:
+            html_data = data
+    if plain_data:
+        return _decode_b64url(plain_data)
+    if html_data:
+        return _HTML_TAG_RE.sub(" ", html.unescape(_decode_b64url(html_data)))
+    return ""
+
+
+def _fetch_threads_raw(limit: int, query: str) -> list[dict[str, str]]:
+    """
+    Fetch inbox threads through the raw Gmail v1 API (no MCP server).
+
+    Fresh cloud deployments (e.g. Streamlit Community Cloud) have neither the
+    Cline MCP settings file nor the gmail-mcp-server clone, so fetch falls
+    back to the same googleapiclient grant (token.json) send_reply() already
+    uses. Output shape is identical to the MCP path: threads come back
+    newest-first and the LAST message of each thread supplies sender,
+    subject, date and the body the snippet is cut from — the same fields the
+    MCP path reads off the newest message.
+    """
+    try:
+        service = _build_gmail_service()
+    except RuntimeError as exc:
+        if "OAuth client secrets not found" in str(exc):
+            raise RuntimeError(
+                "Raw Gmail fetch could not authenticate: there is no cached "
+                "OAuth grant (token.json) and the browser consent flow cannot "
+                "run on a headless deployment. Set the GOOGLE_TOKEN_JSON secret "
+                "(the content of a local token.json) in the app's Secrets "
+                "settings, or run the app locally once to create it."
+            ) from exc
+        raise
+
+    listing = (
+        service.users()
+        .threads()
+        .list(userId=GMAIL_USER_ID, q=query, maxResults=limit)
+        .execute()
+    )
+    threads: list[dict[str, str]] = []
+    for stub in listing.get("threads", [])[:limit]:
+        thread = (
+            service.users()
+            .threads()
+            .get(userId=GMAIL_USER_ID, id=stub.get("id", ""), format="full")
+            .execute()
+        )
+        messages = thread.get("messages") or []
+        if not messages:
+            continue  # a thread with no messages cannot be triaged
+        last = messages[-1]  # newest message — what the MCP path would read
+        headers = {
+            str(header.get("name", "")).lower(): str(header.get("value", ""))
+            for header in (last.get("payload") or {}).get("headers", [])
+        }
+        threads.append(
+            {
+                "thread_id": thread.get("id") or stub.get("id", ""),
+                "sender": headers.get("from", ""),
+                "subject": headers.get("subject", ""),
+                "snippet": _make_snippet(_payload_to_text(last.get("payload") or {})),
+                "date": headers.get("date", ""),
+            }
+        )
+    return threads
+
+
+def _fetch_threads_mcp(limit: int, query: str) -> list[dict[str, str]]:
     """
     Fetch the most recent inbox threads through the Gmail MCP server.
 
