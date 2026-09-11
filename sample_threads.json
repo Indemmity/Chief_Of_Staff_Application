@@ -1,0 +1,77 @@
+[
+  {
+    "id": "19b7e2a4c8f10d53",
+    "subject": "P1 incident: checkout API 500s spiking since 08:12 UTC",
+    "messages": [
+      {
+        "from": "PagerDuty <notify@pagerduty.com>",
+        "date": "Mon, 7 Sep 2026 08:14:03 +0000",
+        "body": "HIGH urgency incident triggered on checkout-service (prod-eu).\n\nError rate: 27% of requests returning HTTP 500 over the last 5 minutes (baseline < 0.5%). First affected trace at 08:12:41 UTC. Region: eu-west-1 only.\n\nAssignee: on-call backend (you). Escalation policy: backend-primary, 5 min. Acknowledge in the PagerDuty app or reply to this email."
+      },
+      {
+        "from": "Marcus Webb <marcus.webb@northwind-labs.com>",
+        "date": "Mon, 7 Sep 2026 08:31:47 +0000",
+        "body": "Confirming the spike correlates with v2.14.0, which shipped at 07:58 UTC. I'm rolling the deploy back now and watching the error dashboard.\n\nCan you own incident comms and verify EU recovery once the rollback lands? I need an answer before the 09:15 incident standup so we can split the roles."
+      },
+      {
+        "from": "Dana Okafor <dana.okafor@northwind-labs.com>",
+        "date": "Mon, 7 Sep 2026 09:02:19 +0000",
+        "body": "Two of our top-10 accounts have hit this in the last half hour and support tickets are climbing.\n\nI need an ETA for full recovery and a two-line customer note I can send to key accounts by 10:00. Please reply to this thread with both, even if the ETA is rough."
+      }
+    ]
+  },
+  {
+    "id": "19b6d9f3a2e58c41",
+    "subject": "Q3 self-review — due Wednesday",
+    "messages": [
+      {
+        "from": "Renee Alvarez <renee.alvarez@northwind-labs.com>",
+        "date": "Fri, 4 Sep 2026 16:20:04 +0000",
+        "body": "HR just opened the Q3 review cycle in Lattice, and your self-assessment is due Wednesday, Sep 9, end of day.\n\nFor the form, I'd like: two wins with impact numbers, one growth area, and a one-paragraph status on the billing-exporter migration. I use these directly in Thursday's calibration session, so specifics beat adjectives.\n\nIf the Lattice link doesn't work, tell me and I'll raise it with HR — it was flaky for half the team last quarter."
+      },
+      {
+        "from": "Renee Alvarez <renee.alvarez@northwind-labs.com>",
+        "date": "Mon, 7 Sep 2026 09:12:51 +0000",
+        "body": "Quick nudge before the week fills up — the self-review is due Wednesday EOD and I know you have the incident on your plate this morning.\n\nI've added 30 minutes to Thursday's 1:1 for calibration prep, so having your draft in Lattice by then would be ideal. Ping me if you want to talk through the growth-area section."
+      }
+    ]
+  },
+  {
+    "id": "19b5c8e7d6a94b20",
+    "subject": "Notes: Platform team weekly sync — Sep 4",
+    "messages": [
+      {
+        "from": "Tomas Rivera <tomas.rivera@northwind-labs.com>",
+        "date": "Fri, 4 Sep 2026 11:05:37 +0000",
+        "body": "Notes from Thursday's platform sync, for anyone who missed it:\n\n1. Billing-exporter migration is 80% done — cutover review is scheduled for Sep 11, owners should sign off their dashboards by then.\n2. Feature freeze for the autumn release starts Sep 18; anything not merged by the 17th slips to November.\n3. On-call rotation changes take effect Oct 1 — check the new schedule doc before then.\n4. Hiring: two backend offers are out, one accepted.\n\nNo action needed from most of you — only the billing-exporter owners have a deadline (Sep 11 sign-off). Full doc in the usual Drive folder."
+      }
+    ]
+  },
+  {
+    "id": "19b4a7c5e3f28d91",
+    "subject": "Re: Northwind x Vendorly — 500-seat renewal quote (expires Sep 12)",
+    "messages": [
+      {
+        "from": "Sam Chen <sam.chen@vendorly.io>",
+        "date": "Thu, 3 Sep 2026 10:18:22 +0000",
+        "body": "Hi,\n\nFollowing up on our call last week — the formal renewal quote is attached.\n\nSummary: 500 seats, $84,500/year, a 3% uplift over your current contract, same SLA tier. The quote is valid until Sep 12, after which list pricing applies.\n\nCould you confirm your intent to renew, or let me know if procurement needs anything else from us (W-9, SOC 2 report, security questionnaire — all can go out today)?"
+      },
+      {
+        "from": "Sam Chen <sam.chen@vendorly.io>",
+        "date": "Sat, 5 Sep 2026 09:40:11 +0000",
+        "body": "Just floating this back to the top of your inbox — the quote expires Sep 12, so this week is the window to lock it in.\n\nOne update: I can do 2.5% uplift if you commit to two years, or hold at 3% for a one-year term. Would a 15-minute call Tuesday or Wednesday work to close this out? I'll send a calendar hold once you confirm."
+      }
+    ]
+  },
+  {
+    "id": "19b7f1b3d5c62a08",
+    "subject": "Design review: new onboarding flow — Thu Sep 10?",
+    "messages": [
+      {
+        "from": "Hana Kobayashi <hana.kobayashi@northwind-labs.com>",
+        "date": "Mon, 7 Sep 2026 09:45:30 +0000",
+        "body": "The clickable prototype for the new onboarding flow is ready in Figma (link in the design channel).\n\nI'd like to run the design review this week so engineering has enough runway before the Sep 18 feature freeze. Two slots on the table:\n\n- Thursday, Sep 10, 14:00-15:00\n- Friday, Sep 11, 11:00-12:00\n\nI specifically need you there since the review touches the API surface and the auth handoff. Agenda: three flows, about 45 minutes of walkthrough plus 15 minutes for questions. Reply with whichever slot works and I'll send the invite today."
+      }
+    ]
+  }
+]

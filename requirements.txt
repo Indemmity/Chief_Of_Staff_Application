@@ -1,0 +1,21 @@
+# Approval gate + AI email ghostwriter
+streamlit>=1.37
+
+# Listed per spec — the Groq client is still not imported anywhere. Ready
+# whenever the pipeline grows a Groq backend.
+groq>=0.11
+
+# Primary LLM backend: triage.py and draft_machine.py call OpenRouter
+# (OpenAI-compatible API) through the openai SDK, via llm_client.py
+openai>=1.0
+
+# Fallback LLM backend: llm_client.py falls back to Gemini when OpenRouter
+# fails or no OPENROUTER_API_KEY is set
+google-generativeai>=0.8
+
+# Loads the .env holding OPENROUTER_API_KEY / GEMINI_API_KEY on import
+python-dotenv>=1.0
+
+# engine.send_reply() sends through the raw Gmail API (googleapiclient),
+# reusing the OAuth grant the Gmail MCP server keeps in ~/.gmail-mcp/
+google-api-python-client>=2.0

@@ -1,0 +1,29 @@
+# --- Secrets / credentials: NEVER commit ---
+.env
+.env.*
+token.json
+.streamlit/secrets.toml
+
+# --- Vendored tool: has its own .git repo, node_modules, and OAuth keys ---
+gmail-mcp-server/
+
+# --- Virtual environments ---
+.venv/
+.venv-1/
+venv/
+
+# --- Python artifacts ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# --- Node artifacts (root has no package.json; lockfile is an empty npm artifact) ---
+node_modules/
+package-lock.json
+
+# --- Scratch files ---
+a.txt
+
+# --- OS / editor noise ---
+.DS_Store
+Thumbs.db

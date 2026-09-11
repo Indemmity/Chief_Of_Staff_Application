@@ -1,0 +1,7 @@
+# Dark theme matching the custom CSS in approval_gate.py.
+[theme]
+base = "dark"
+primaryColor = "#e94560"
+backgroundColor = "#1a1a2e"
+secondaryBackgroundColor = "#16213e"
+textColor = "#eef2fb"
