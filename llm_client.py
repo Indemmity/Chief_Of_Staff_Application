@@ -4,13 +4,16 @@ Chief-of-Staff pipeline.
 
 Backends, tried in order:
 
-1. OpenRouter (primary) — OpenAI-compatible REST API at
+1. UnoRouter (primary) — OpenAI-compatible REST API at
+   https://api.unorouter.com/v1, authenticated with UNOROUTER_API_KEY.
+
+2. OpenRouter — OpenAI-compatible REST API at
    https://openrouter.ai/api/v1, authenticated with OPENROUTER_API_KEY.
    The model slug defaults to google/gemini-3.7-flash (the same model the
    codebase used via the Gemini SDK, now billed pay-as-you-go through
    OpenRouter) and can be overridden with OPENROUTER_MODEL in .env.
 
-2. Google Gemini (fallback) — the classic google.generativeai SDK with
+3. Google Gemini (fallback) — the classic google.generativeai SDK with
    GEMINI_API_KEY. Used automatically when OpenRouter is unavailable
    (missing key, network error, rate limit, empty response), so a drained
    OpenRouter quota never blocks the pipeline.
@@ -33,6 +36,8 @@ from dotenv import load_dotenv
 __all__ = [
     "OPENROUTER_BASE_URL",
     "OPENROUTER_MODEL",
+    "UNOROUTER_BASE_URL",
+    "UNOROUTER_MODEL",
     "GEMINI_MODEL",
     "DEFAULT_MAX_TOKENS",
     "last_backend",
@@ -51,6 +56,14 @@ WORKSPACE_DIR = Path(__file__).resolve().parent
 load_dotenv(WORKSPACE_DIR / ".env")
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+# UnoRouter exposes an OpenAI-compatible chat-completions endpoint.
+UNOROUTER_BASE_URL = os.environ.get(
+    "UNOROUTER_BASE_URL", "https://api.unorouter.com/v1"
+)
+
+# Free model from UnoRouter's platform quickstart; override in Secrets/.env.
+UNOROUTER_MODEL = os.environ.get("UNOROUTER_MODEL", "gpt-oss-120b:free")
 
 # OpenRouter model slug. Override with OPENROUTER_MODEL in .env — e.g. swap
 # in a ":free" model or a newer Gemini flash release without touching code.
@@ -79,11 +92,14 @@ DEFAULT_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "4096"))
 last_backend: str | None = None
 
 _openrouter_client = None  # OpenAI SDK client, created lazily on first use
+_unorouter_client = None  # OpenAI SDK client, created lazily on first use
 
 
 def configured_backends() -> list[str]:
     """Names of the backends that have an API key configured, in try order."""
     backends = []
+    if os.environ.get("UNOROUTER_API_KEY"):
+        backends.append("unorouter")
     if os.environ.get("OPENROUTER_API_KEY"):
         backends.append("openrouter")
     if os.environ.get("GEMINI_API_KEY"):
@@ -95,6 +111,32 @@ def configured_backends() -> list[str]:
 # Backend implementations (each returns text or raises; an empty string counts
 # as a failure so "blocked by safety filters" responses trigger the fallback)
 # --------------------------------------------------------------------------- #
+
+
+def _generate_unorouter(
+    system_prompt: str, user_prompt: str, max_tokens: int | None
+) -> str:
+    """Call UnoRouter through its OpenAI-compatible chat API."""
+    global _unorouter_client
+    if _unorouter_client is None:
+        from openai import OpenAI
+
+        _unorouter_client = OpenAI(
+            base_url=UNOROUTER_BASE_URL,
+            api_key=os.environ["UNOROUTER_API_KEY"],
+            default_headers={"X-Title": "Chief of Staff"},
+        )
+
+    messages = [{"role": "user", "content": user_prompt}]
+    if system_prompt:
+        messages.insert(0, {"role": "system", "content": system_prompt})
+    kwargs: dict = {"model": UNOROUTER_MODEL, "messages": messages}
+    if max_tokens:
+        kwargs["max_tokens"] = max_tokens
+    response = _unorouter_client.chat.completions.create(**kwargs)
+    if not response.choices:
+        return ""
+    return (response.choices[0].message.content or "").strip()
 
 
 def _generate_openrouter(
@@ -189,6 +231,7 @@ def generate_text(
 
     failures: list[str] = []
     backends = (
+        ("unorouter", _generate_unorouter, "UNOROUTER_API_KEY"),
         ("openrouter", _generate_openrouter, "OPENROUTER_API_KEY"),
         ("gemini", _generate_gemini, "GEMINI_API_KEY"),
     )
@@ -223,7 +266,11 @@ def generate_text(
             failures.append(f"{name}: empty response (blocked or truncated?)")
             continue
 
-        model = OPENROUTER_MODEL if name == "openrouter" else GEMINI_MODEL
+        model = {
+            "unorouter": UNOROUTER_MODEL,
+            "openrouter": OPENROUTER_MODEL,
+            "gemini": GEMINI_MODEL,
+        }[name]
         last_backend = f"{name}:{model}"
         return text
 
