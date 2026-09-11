@@ -76,8 +76,19 @@ def load_tone_profile(path: str | Path = "tone_profile.json") -> dict:
 
 
 def load_past_replies(path: str | Path = "past_replies.json") -> list:
-    """Read and return the list of past reply examples."""
-    return _read_json(path)
+    """Read past reply examples, or return none when history is unavailable.
+
+    `past_replies.json` is local personalization data and is intentionally
+    gitignored. A fresh cloud deployment therefore starts without it; draft
+    generation should still work using the tone profile and live thread.
+    """
+    try:
+        value = _read_json(path)
+    except FileNotFoundError:
+        return []
+    if not isinstance(value, list):
+        return []
+    return value
 
 
 # --------------------------------------------------------------------------- #
@@ -272,4 +283,3 @@ if __name__ == "__main__":
     print("---------- USER ----------")
     print(context["user"])
     print()
-
