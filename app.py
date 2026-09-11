@@ -1114,8 +1114,8 @@ def _book_meeting_flow(tid: str, item: dict) -> None:
             last_availability_error,
         ) = _get_calendar_engine()
 
-        # 1) Extract the meeting details with Gemini.
-        with st.spinner("🧠 Parsing the meeting request (Gemini)…"):
+        # 1) Extract the meeting details through the shared LLM backend chain.
+        with st.spinner("🧠 Parsing the meeting request…"):
             details = parse_meeting_request(thread)
         if (details or {}).get("parsing_error"):
             st.error(

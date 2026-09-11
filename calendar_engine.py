@@ -297,6 +297,47 @@ def parse_meeting_request(thread: dict) -> dict:
     raises):
         {"parsing_error": "...", "raw": "..."}
     """
+    # Use the shared backend chain so calendar parsing follows the same
+    # UnoRouter -> OpenRouter -> Gemini configuration as triage and drafting.
+    # The old direct Gemini implementation remains below as legacy reference,
+    # but deployments should never require GEMINI_API_KEY just to book.
+    raw = ""
+    try:
+        from llm_client import generate_text
+
+        raw = generate_text(
+            system_prompt=_MEETING_SYSTEM_PROMPT,
+            user_prompt=_meeting_prompt(thread),
+            max_tokens=1024,
+        )
+        data = json.loads(_strip_code_fences(raw))
+        if not isinstance(data, dict):
+            raise ValueError("LLM did not return a JSON object")
+
+        proposed_times = data.get("proposed_times")
+        if not isinstance(proposed_times, list):
+            raise ValueError("proposed_times must be a list of datetime strings")
+        attendees = data.get("attendees")
+        if not isinstance(attendees, list):
+            raise ValueError("attendees must be a list of email addresses")
+        topic = str(data.get("topic", "")).strip()
+        if not topic:
+            raise ValueError("topic is missing or empty")
+        try:
+            duration_minutes = int(data.get("duration_minutes", 30))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("duration_minutes must be an integer") from exc
+
+        return {
+            "proposed_times": [str(t).strip() for t in proposed_times],
+            "attendees": [str(a).strip() for a in attendees],
+            "topic": topic,
+            "duration_minutes": duration_minutes,
+        }
+    except Exception as exc:  # noqa: BLE001 - parser failures are shown in UI
+        return {"parsing_error": str(exc), "raw": raw}
+
+    # Legacy direct-Gemini implementation retained below for reference.
     raw = ""
     try:
         global _THINKING_DISABLED_SUPPORTED
