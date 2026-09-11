@@ -27,3 +27,7 @@ a.txt
 # --- OS / editor noise ---
 .DS_Store
 Thumbs.db
+
+# --- Personal email data: NEVER commit ---
+approved_drafts.json
+past_replies.json
