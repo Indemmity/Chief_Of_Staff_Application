@@ -67,11 +67,12 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.7-flash")
 #     balance).
 #   * A tiny cap -> Gemini reasoning models spend completion tokens on
 #     thinking too, so the visible answer gets truncated mid-sentence.
-# 8192 mirrors the default the Gemini SDK used before the migration.
+# 4096 is enough for triage and drafting while fitting low OpenRouter credit
+# balances that reject an 8192-token reservation.
 # Override globally with LLM_MAX_TOKENS in .env (e.g. 2048 to fit a drained
 # credit balance — triage replies need ~200 tokens, drafts a few hundred),
 # or per call via the max_tokens argument.
-DEFAULT_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "8192"))
+DEFAULT_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "4096"))
 
 # Which backend answered the most recent generate_text() call
 # ("openrouter:<model>" or "gemini:<model>"); None until the first call.
@@ -174,7 +175,7 @@ def generate_text(
     `system_prompt` may be empty — triage.py passes one combined prompt as
     the user message.
 
-    `max_tokens`: when omitted, DEFAULT_MAX_TOKENS is sent (8192 unless
+    `max_tokens`: when omitted, DEFAULT_MAX_TOKENS is sent (4096 unless
     overridden with LLM_MAX_TOKENS in .env). Do not lower it much — Gemini
     reasoning models spend completion tokens on thinking too, so a small
     cap truncates the visible answer mid-sentence, while a big cap makes
