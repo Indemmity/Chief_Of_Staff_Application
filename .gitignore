@@ -31,3 +31,4 @@ Thumbs.db
 # --- Personal email data: NEVER commit ---
 approved_drafts.json
 past_replies.json
+action_log.json

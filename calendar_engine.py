@@ -163,6 +163,23 @@ def _build_calendar_service() -> Any:
 # your account (it 404s for new users as of Sep 2026 — see .env).
 _MEETING_MODEL = os.environ.get("CALENDAR_GEMINI_MODEL", "gemini-2.5-flash")
 
+# Output budget for the extraction call. On reasoning models (gemini-3.x)
+# max_output_tokens covers INVISIBLE thinking tokens too, so the cap must be
+# generous even for this ~120-token JSON answer: with the old 2048 cap, a
+# heavy thinking draw (~1900 tokens) left the answer cut mid-string — the
+# "Unterminated string starting at: line 1 column 132 (char 131)" bug.
+_MAX_OUTPUT_TOKENS = 8192
+# One retry at double the budget when the first answer is truncated anyway;
+# the truncation is reported as a parsing_error only if the retry truncates.
+_RETRY_OUTPUT_TOKENS = 16384
+
+# Lazily-resolved feature flag: does the installed google.generativeai SDK's
+# GenerationConfig accept a thinking_config field (needed to send
+# thinking_budget=0)? SDK 0.8.6 rejects unknown fields with a ValueError, so
+# the flag stays False there and only the generous budget protects the call.
+_THINKING_DISABLED_SUPPORTED: bool | None = None
+
+
 _MEETING_SYSTEM_PROMPT = """\
 You extract meeting details from email threads.
 
@@ -218,6 +235,48 @@ def _meeting_prompt(thread: dict) -> str:
     )
 
 
+def _finish_reason(response) -> str:
+    """
+    Why the first candidate stopped — 'STOP', 'MAX_TOKENS', 'SAFETY', ... —
+    '' when the response carries no usable candidate. Some SDK versions
+    return an enum (with .name), some a bare int; both are handled.
+    """
+    try:
+        candidate = response.candidates[0]
+    except (AttributeError, IndexError, TypeError):
+        return ""
+    reason = getattr(candidate, "finish_reason", None)
+    if reason is None:
+        return ""
+    name = getattr(reason, "name", None)
+    if name:
+        return str(name)
+    try:
+        return {1: "STOP", 2: "MAX_TOKENS"}.get(int(reason), str(reason))
+    except (TypeError, ValueError):
+        return str(reason)
+
+
+def _meeting_generation_config(max_tokens: int, disable_thinking: bool = True) -> dict:
+    """
+    Generation config for the extraction call.
+
+    max_output_tokens is the TOTAL budget (thinking + visible answer) on
+    reasoning models. disable_thinking adds thinking_budget=0 only when the
+    installed SDK's GenerationConfig accepts a thinking_config field; SDK
+    0.8.6 validates fields strictly and rejects unknown keys with ValueError
+    ("Unknown field for GenerationConfig"), so there the flag is False and
+    the generous max_output_tokens budget alone absorbs the thinking draw.
+    If the SDK ever gains the field, thinking is disabled automatically
+    (removing the nondeterministic budget pressure and most of the latency)
+    with no further code change.
+    """
+    config: dict = {"temperature": 0, "max_output_tokens": max_tokens}
+    if disable_thinking and _THINKING_DISABLED_SUPPORTED:
+        config["thinking_config"] = {"thinking_budget": 0}
+    return config
+
+
 def parse_meeting_request(thread: dict) -> dict:
     """
     Extract meeting details from an email thread with Gemini (gemini-2.5-flash).
@@ -240,6 +299,8 @@ def parse_meeting_request(thread: dict) -> dict:
     """
     raw = ""
     try:
+        global _THINKING_DISABLED_SUPPORTED
+
         api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:
             raise RuntimeError("GEMINI_API_KEY is not set")
@@ -252,15 +313,54 @@ def parse_meeting_request(thread: dict) -> dict:
             warnings.simplefilter("ignore", FutureWarning)
             import google.generativeai as genai
 
+        # Resolve the thinking_config feature flag once per process (see
+        # _meeting_generation_config for why it must be detected, not assumed).
+        if _THINKING_DISABLED_SUPPORTED is None:
+            _THINKING_DISABLED_SUPPORTED = (
+                "thinking_config"
+                in getattr(genai.types.GenerationConfig, "__dataclass_fields__", {})
+            )
+
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel(
             model_name=_MEETING_MODEL,
             system_instruction=_MEETING_SYSTEM_PROMPT,
         )
-        response = model.generate_content(
-            _meeting_prompt(thread),
-            generation_config={"temperature": 0, "max_output_tokens": 2048},
-        )
+
+        def _generate(max_tokens: int, disable_thinking: bool = True):
+            """One extraction call at the given output budget."""
+            return model.generate_content(
+                _meeting_prompt(thread),
+                generation_config=_meeting_generation_config(
+                    max_tokens, disable_thinking
+                ),
+            )
+
+        # Generous budget up front: thinking and the visible answer share
+        # max_output_tokens (the old 2048 cap let a heavy thinking draw cut
+        # the JSON mid-string — see _MAX_OUTPUT_TOKENS above).
+        try:
+            response = _generate(_MAX_OUTPUT_TOKENS)
+        except Exception as exc:  # noqa: BLE001 — only a thinking_config
+            # rejection (SDK field validation) falls through to the plain
+            # config; every other failure re-raises into the normal path.
+            if "thinking" not in str(exc).lower():
+                raise
+            response = _generate(_MAX_OUTPUT_TOKENS, disable_thinking=False)
+
+        # MAX_TOKENS means thinking + answer together crossed the budget and
+        # the JSON was cut mid-string. One retry at double the budget; the
+        # truncation is only reported as a parsing_error if the retry
+        # truncates too.
+        if _finish_reason(response) == "MAX_TOKENS":
+            response = _generate(_RETRY_OUTPUT_TOKENS)
+            if _finish_reason(response) == "MAX_TOKENS":
+                raise RuntimeError(
+                    "Gemini response truncated by max_output_tokens twice "
+                    f"({_MAX_OUTPUT_TOKENS} then {_RETRY_OUTPUT_TOKENS}) — "
+                    "thinking consumed the budget before the JSON closed"
+                )
+
         try:
             raw = (response.text or "").strip()
         except (ValueError, AttributeError, IndexError):
