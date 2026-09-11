@@ -19,3 +19,5 @@ python-dotenv>=1.0
 # engine.send_reply() sends through the raw Gmail API (googleapiclient),
 # reusing the OAuth grant the Gmail MCP server keeps in ~/.gmail-mcp/
 google-api-python-client>=2.0
+# OAuth client flow used by the raw Gmail API fallback.
+google-auth-oauthlib>=1.0
