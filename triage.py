@@ -4,7 +4,9 @@ confidence) with the LLM backend from llm_client: OpenRouter primary,
 Gemini automatic fallback.
 """
 
+import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 from llm_client import generate_text
 
@@ -237,20 +239,28 @@ def parse_triage_response(text: str) -> dict:
 
 
 def triage_inbox(threads: list) -> list:
-    triaged = []
+    if not threads:
+        return []
 
-    for thread in threads:
+    # Inbox classification is I/O-bound: each email is an independent model
+    # request. A small bounded pool cuts wall-clock time while avoiding the
+    # rate-limit spikes caused by launching one worker per email.
+    default_workers = min(4, len(threads))
+    max_workers = max(
+        1, int(os.environ.get("LLM_CONCURRENCY", str(default_workers)))
+    )
+    max_workers = min(max_workers, len(threads))
 
+    def classify(thread: dict) -> dict:
         label = triage_thread(
             sender=thread["sender"],
             subject=thread["subject"],
-            snippet=thread["snippet"]
+            snippet=thread["snippet"],
         )
+        return {**thread, **label}
 
-        triaged.append({
-            **thread,
-            **label
-        })
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        triaged = list(pool.map(classify, threads))
 
     priority_order = {
         "urgent": 0,
